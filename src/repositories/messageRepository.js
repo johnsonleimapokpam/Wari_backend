@@ -116,7 +116,7 @@ const updateMessageStatus = async ({ messageId, status, deliveredAt, readAt }) =
     [messageId, status, deliveredAt || null, readAt || null]
   );
 
-  return result.rows[0] || null;
+  return mapMessage(result.rows[0]) || null;
 };
 
 const markConversationMessagesDelivered = async ({ conversationId, recipientUserId, deliveredAt = new Date() }) => {
