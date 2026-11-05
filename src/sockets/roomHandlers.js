@@ -181,7 +181,7 @@ const registerRoomHandlers = (socket, io, state) => {
       const nextPresenceCount = decrementRoomPresence(state, roomName, socket.data.user.id);
 
       if (nextPresenceCount === 0) {
-        const conversationId = roomName.replace('conversation:', '');
+        const conversationId = roomName.replace(/^(conversation|group):/, '');
         io.to(roomName).emit('user_disconnected', {
           conversationId,
           user: serializeSocketUser(socket)

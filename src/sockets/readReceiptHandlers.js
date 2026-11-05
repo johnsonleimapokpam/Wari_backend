@@ -65,7 +65,7 @@ const registerReadReceiptHandlers = (socket, io) => {
           });
         }
 
-        const receipt = await groupMessageService.markMessageDelivered({
+        const receipt = await groupMessageService.markMessageRead({
           groupId: data.conversationId,
           messageId: data.messageId,
           userId: socket.data.user.id
@@ -180,11 +180,11 @@ const registerReadReceiptHandlers = (socket, io) => {
             continue;
           }
 
-          if (!receiptBySender.has(message.sender_id)) {
-            receiptBySender.set(message.sender_id, []);
+          if (!receiptBySender.has(message.senderId)) {
+            receiptBySender.set(message.senderId, []);
           }
 
-          receiptBySender.get(message.sender_id).push({
+          receiptBySender.get(message.senderId).push({
             messageId: receipt.message_id,
             readAt: receipt.read_at,
             status: 'READ'

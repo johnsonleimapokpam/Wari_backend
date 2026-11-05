@@ -63,7 +63,7 @@ const registerDeliveryHandlers = (socket, io) => {
       });
 
       if (result.isUpdated) {
-        emitDeliveryStatus(io, socket.data.user.id, message.sender_id, result.message);
+        emitDeliveryStatus(io, socket.data.user.id, message.senderId, result.message);
       }
 
       if (typeof ack === 'function') {

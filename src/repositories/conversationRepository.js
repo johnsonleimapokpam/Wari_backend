@@ -57,7 +57,9 @@ const findConversationMember = async (conversationId, userId) => {
     `
       SELECT conversation_id, user_id, joined_at, last_read_message_id, last_read_at, is_muted, is_archived, role, left_at, added_by_user_id
       FROM conversation_members
-      WHERE conversation_id = $1 AND user_id = $2
+      WHERE conversation_id = $1
+        AND user_id = $2
+        AND left_at IS NULL
       LIMIT 1
     `,
     [conversationId, userId]

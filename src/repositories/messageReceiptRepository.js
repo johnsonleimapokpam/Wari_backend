@@ -1,6 +1,6 @@
 const { query, withTransaction } = require('../config/db');
 
-const createReceipts = async ({ messageId, recipientIds, deliveredAt = null, readAt = null }) => {
+const createReceipts = async ({ client = null, messageId, recipientIds, deliveredAt = null, readAt = null }) => {
   if (!recipientIds || recipientIds.length === 0) {
     return [];
   }
@@ -14,7 +14,8 @@ const createReceipts = async ({ messageId, recipientIds, deliveredAt = null, rea
     values.push(messageId, recipientId, deliveredAt, readAt);
   });
 
-  const result = await query(
+  const executor = client || { query };
+  const result = await executor.query(
     `
       INSERT INTO message_receipts (message_id, user_id, delivered_at, read_at)
       VALUES ${placeholders.join(', ')}
@@ -30,8 +31,9 @@ const createReceipts = async ({ messageId, recipientIds, deliveredAt = null, rea
   return result.rows;
 };
 
-const markReceiptDelivered = async ({ messageId, userId, deliveredAt = new Date() }) => {
-  const result = await query(
+const markReceiptDelivered = async ({ client = null, messageId, userId, deliveredAt = new Date() }) => {
+  const executor = client || { query };
+  const result = await executor.query(
     `
       UPDATE message_receipts
       SET delivered_at = COALESCE(delivered_at, $3),
@@ -46,8 +48,9 @@ const markReceiptDelivered = async ({ messageId, userId, deliveredAt = new Date(
   return result.rows[0] || null;
 };
 
-const markReceiptRead = async ({ messageId, userId, readAt = new Date() }) => {
-  const result = await query(
+const markReceiptRead = async ({ client = null, messageId, userId, readAt = new Date() }) => {
+  const executor = client || { query };
+  const result = await executor.query(
     `
       UPDATE message_receipts
       SET delivered_at = COALESCE(delivered_at, $3),
@@ -63,8 +66,9 @@ const markReceiptRead = async ({ messageId, userId, readAt = new Date() }) => {
   return result.rows[0] || null;
 };
 
-const markConversationRead = async ({ conversationId, userId, readAt = new Date() }) => {
-  const result = await query(
+const markConversationRead = async ({ client = null, conversationId, userId, readAt = new Date() }) => {
+  const executor = client || { query };
+  const result = await executor.query(
     `
       UPDATE message_receipts mr
       SET delivered_at = COALESCE(mr.delivered_at, $3),

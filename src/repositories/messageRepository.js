@@ -1,5 +1,6 @@
 const { query, withTransaction } = require('../config/db');
 const { MESSAGE_STATUSES } = require('../utils/messageStatus');
+const ApiError = require('../utils/ApiError');
 
 const mapMessage = (row) => {
   if (!row) {
@@ -24,7 +25,27 @@ const mapMessage = (row) => {
   };
 };
 
-const createMessage = async ({ conversationId, senderId, body, clientMessageId }) => {
+const selectMessageColumns = `
+  id, conversation_id, sender_id, message_type, body, client_message_id,
+  status, delivered_at, read_at, metadata, edited_at, deleted_at,
+  created_at, updated_at
+`;
+
+const assertIdempotencyMatch = ({ existing, conversationId, senderId, body, clientMessageId }) => {
+  if (
+    existing.sender_id !== senderId ||
+    existing.body !== body ||
+    existing.conversation_id !== conversationId
+  ) {
+    throw new ApiError(409, 'Idempotency key was already used with a different request', {
+      code: 'IDEMPOTENCY_KEY_REUSED'
+    });
+  }
+
+  return clientMessageId;
+};
+
+const createMessage = async ({ conversationId, senderId, body, clientMessageId, afterPersist = null }) => {
   return withTransaction(async (client) => {
     let insertResult;
 
@@ -34,7 +55,7 @@ const createMessage = async ({ conversationId, senderId, body, clientMessageId }
           INSERT INTO messages (conversation_id, sender_id, body, client_message_id)
           VALUES ($1, $2, $3, $4)
           ON CONFLICT (conversation_id, client_message_id) WHERE client_message_id IS NOT NULL DO NOTHING
-          RETURNING id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+          RETURNING ${selectMessageColumns}
         `,
         [conversationId, senderId, body, clientMessageId]
       );
@@ -43,7 +64,7 @@ const createMessage = async ({ conversationId, senderId, body, clientMessageId }
         `
           INSERT INTO messages (conversation_id, sender_id, body)
           VALUES ($1, $2, $3)
-            RETURNING id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+            RETURNING ${selectMessageColumns}
         `,
         [conversationId, senderId, body]
       );
@@ -55,7 +76,7 @@ const createMessage = async ({ conversationId, senderId, body, clientMessageId }
     if (!row && clientMessageId) {
       const existingResult = await client.query(
         `
-          SELECT id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+          SELECT ${selectMessageColumns}
           FROM messages
           WHERE conversation_id = $1
             AND client_message_id = $2
@@ -72,6 +93,10 @@ const createMessage = async ({ conversationId, senderId, body, clientMessageId }
       throw new Error('Failed to persist message');
     }
 
+    if (isDuplicate) {
+      assertIdempotencyMatch({ existing: row, conversationId, senderId, body, clientMessageId });
+    }
+
     await client.query(
       `
         UPDATE conversations
@@ -81,17 +106,29 @@ const createMessage = async ({ conversationId, senderId, body, clientMessageId }
       [row.id, conversationId]
     );
 
-    return {
+    const result = {
       message: mapMessage(row),
       isDuplicate
     };
+
+    if (afterPersist) {
+      const afterPersistResult = await afterPersist({ client, ...result });
+      if (afterPersistResult?.message) {
+        result.message = mapMessage(afterPersistResult.message);
+      }
+      if (afterPersistResult?.delivery) {
+        result.delivery = afterPersistResult.delivery;
+      }
+    }
+
+    return result;
   });
 };
 
 const findMessageById = async (messageId) => {
   const result = await query(
     `
-      SELECT id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+      SELECT ${selectMessageColumns}
       FROM messages
       WHERE id = $1 AND deleted_at IS NULL
       LIMIT 1
@@ -102,16 +139,22 @@ const findMessageById = async (messageId) => {
   return mapMessage(result.rows[0]) || null;
 };
 
-const updateMessageStatus = async ({ messageId, status, deliveredAt, readAt }) => {
-  const result = await query(
+const updateMessageStatus = async ({ client = null, messageId, status, deliveredAt, readAt }) => {
+  const executor = client || { query };
+  const result = await executor.query(
     `
       UPDATE messages
-      SET status = $2,
-          delivered_at = COALESCE($3, delivered_at),
-          read_at = COALESCE($4, read_at)
+        SET status = CASE
+              WHEN status = $2 THEN status
+              WHEN status = 'READ' THEN status
+              WHEN status = 'DELIVERED' AND $2 = 'SENT' THEN status
+              ELSE $2
+            END,
+            delivered_at = COALESCE($3, delivered_at),
+            read_at = COALESCE($4, read_at)
       WHERE id = $1
         AND deleted_at IS NULL
-      RETURNING id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+      RETURNING ${selectMessageColumns}
     `,
     [messageId, status, deliveredAt || null, readAt || null]
   );
@@ -129,7 +172,7 @@ const markConversationMessagesDelivered = async ({ conversationId, recipientUser
         AND sender_id <> $2
         AND status = $5
         AND deleted_at IS NULL
-      RETURNING id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+      RETURNING ${selectMessageColumns}
     `,
     [conversationId, recipientUserId, MESSAGE_STATUSES.DELIVERED, deliveredAt, MESSAGE_STATUSES.SENT]
   );
@@ -148,7 +191,7 @@ const markConversationMessagesRead = async ({ conversationId, readerUserId, read
         AND sender_id <> $2
         AND status IN ($5, $6)
         AND deleted_at IS NULL
-      RETURNING id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+      RETURNING ${selectMessageColumns}
     `,
     [conversationId, readerUserId, MESSAGE_STATUSES.READ, readAt, MESSAGE_STATUSES.SENT, MESSAGE_STATUSES.DELIVERED]
   );
@@ -159,7 +202,7 @@ const markConversationMessagesRead = async ({ conversationId, readerUserId, read
 const listMessagesByConversation = async ({ conversationId, limit = 50, before = null }) => {
   const result = await query(
     `
-      SELECT id, conversation_id, sender_id, message_type, body, client_message_id, status, delivered_at, read_at, metadata, edited_at, deleted_at, created_at, updated_at
+      SELECT ${selectMessageColumns}
       FROM messages
       WHERE conversation_id = $1
         AND deleted_at IS NULL
@@ -174,6 +217,7 @@ const listMessagesByConversation = async ({ conversationId, limit = 50, before =
 };
 
 module.exports = {
+  assertIdempotencyMatch,
   createMessage,
   findMessageById,
   listMessagesByConversation,

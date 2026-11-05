@@ -49,7 +49,7 @@ const getGroupMessagesQuerySchema = z.object({
 const groupMessageSchema = z.object({
   body: z.object({
     body: z.string().min(1).max(5000),
-    clientMessageId: z.string().uuid().optional()
+    clientMessageId: z.string().uuid()
   }),
   params: z.object({}).passthrough(),
   query: z.object({

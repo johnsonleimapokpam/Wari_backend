@@ -7,7 +7,7 @@ const sendMessage = asyncHandler(async (req, res) => {
     conversationId: req.body.conversationId,
     senderId: req.user.id,
     body: req.body.body,
-    clientMessageId: req.body.clientMessageId || null
+    clientMessageId: req.body.clientMessageId
   });
 
   return sendSuccess(res, {

@@ -112,6 +112,7 @@ BEGIN
         FROM conversation_members
         WHERE conversation_id = NEW.conversation_id
           AND user_id = NEW.sender_id
+          AND left_at IS NULL
     ) THEN
         RAISE EXCEPTION 'Sender must be a member of the conversation';
     END IF;

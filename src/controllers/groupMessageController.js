@@ -7,7 +7,7 @@ const sendGroupMessage = asyncHandler(async (req, res) => {
     groupId: req.params.id,
     senderId: req.user.id,
     body: req.body.body,
-    clientMessageId: req.body.clientMessageId || null
+    clientMessageId: req.body.clientMessageId
   });
 
   return sendSuccess(res, {

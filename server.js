@@ -21,12 +21,18 @@ async function bootstrap(){
 }
 
 const shutdown = async () => {
-  io.close(() => {
-    server.close(async () => {
-      await pool.end();
-      process.exit(0);
-    });
-  });
+  io.close();
+
+  if (server) {
+    await new Promise((resolve) => server.close(resolve));
+  }
+
+  if (redisClient.isOpen) {
+    await redisClient.quit();
+  }
+
+  await pool.end();
+  process.exit(0);
 };
 
 process.on('SIGINT', shutdown);

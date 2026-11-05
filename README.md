@@ -37,6 +37,23 @@ Phase 2 adds `client_message_id` to `messages` so the write path can deduplicate
 
 The schema files live at `sql/001_initial_schema.sql` and `sql/002_phase2_socket_idempotency.sql`.
 
+### Idempotent message writes
+
+Message sends must include a UUID `clientMessageId` and are protected by the unique
+`(conversation_id, client_message_id)` index. PostgreSQL arbitrates concurrent
+requests, including requests handled by different application instances.
+
+The first request persists the message and all related work in one transaction.
+Retries return the original message without repeating group receipt creation or
+delivery side effects. Reusing a client message ID with a different sender or
+body returns `409 IDEMPOTENCY_KEY_REUSED`; callers must generate a new client
+message ID for a new message. Keyless message writes are not supported because
+they cannot be made retry-safe.
+
+The integrity trigger and status update logic also prevent inactive members from
+sending messages and prevent message status from moving backward from `READ` to
+`DELIVERED` or `SENT`.
+
 ## Security Notes
 
 - Passwords are hashed with bcrypt before storage.

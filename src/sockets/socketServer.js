@@ -35,7 +35,14 @@ const initializeSocketServer = (httpServer) => {
         `[SOCKET CONNECTED] user =${userId} socket=${socket.id} `
       );
 
+      registerPresenceHandlers(socket, io);
+
       const presenceResult = await presenceService.registerConnection({userId, socketId: socket.id});
+
+      if (socket.disconnected) {
+        await presenceService.unregisterConnection({ userId, socketId: socket.id });
+        return;
+      }
 
       if(presenceResult.isNewOnlineTransition){
         io.emit('user_online', presenceResult.snapshot);
@@ -47,7 +54,6 @@ const initializeSocketServer = (httpServer) => {
 
       console.log(`[ROOM JOINED] ${socket.id} -> ${userRoom}`);
 
-      registerPresenceHandlers(socket, io);
       registerTypingHandlers(socket, io);
       registerDeliveryHandlers(socket, io);
       registerReadReceiptHandlers(socket, io);
