@@ -27,43 +27,51 @@ const initializeSocketServer = (httpServer) => {
 
   io.use(socketAuth);
 
-  io.on('connection', async (socket) => {
-    try{
-      const userId = socket.data.user.id;
+  io.on('connection', (socket) => {
+    const userId = socket.data.user.id;
+    const userRoom = `user:${userId}`;
 
-      console.log(
-        `[SOCKET CONNECTED] user =${userId} socket=${socket.id} `
-      );
+    console.log(
+      `[SOCKET CONNECTED] user =${userId} socket=${socket.id} `
+    );
 
-      registerPresenceHandlers(socket, io);
+    // Register handlers and join the private room before awaiting any I/O.
+    // Socket.IO does not queue incoming events while a connection handler is
+    // awaiting, so registering later can silently drop join_conversation and
+    // send_message packets from fast clients or reconnects.
+    registerPresenceHandlers(socket, io);
+    registerTypingHandlers(socket, io);
+    registerDeliveryHandlers(socket, io);
+    registerReadReceiptHandlers(socket, io);
+    registerMessageHandlers(socket, io, state);
+    registerRoomHandlers(socket, io, state);
 
-      const presenceResult = await presenceService.registerConnection({userId, socketId: socket.id});
+    socket.join(userRoom);
 
-      if (socket.disconnected) {
-        await presenceService.unregisterConnection({ userId, socketId: socket.id });
-        return;
+    console.log(`[ROOM JOINED] ${socket.id} -> ${userRoom}`);
+
+    const initializePresence = async () => {
+      try {
+        const presenceResult = await presenceService.registerConnection({
+          userId,
+          socketId: socket.id
+        });
+
+        if (socket.disconnected) {
+          await presenceService.unregisterConnection({ userId, socketId: socket.id });
+          return;
+        }
+
+        if (presenceResult.isNewOnlineTransition) {
+          io.emit('user_online', presenceResult.snapshot);
+        }
+      } catch (error) {
+        console.error('Socket connection initialization failed', error);
+        socket.disconnect(true);
       }
+    };
 
-      if(presenceResult.isNewOnlineTransition){
-        io.emit('user_online', presenceResult.snapshot);
-      }
-
-      const userRoom = `user:${userId}`;
-
-      socket.join(userRoom);
-
-      console.log(`[ROOM JOINED] ${socket.id} -> ${userRoom}`);
-
-      registerTypingHandlers(socket, io);
-      registerDeliveryHandlers(socket, io);
-      registerReadReceiptHandlers(socket, io);
-      registerMessageHandlers(socket, io, state);
-      registerRoomHandlers(socket, io, state);
-    } catch (error){
-      console.error('Socket connection initialization failed', error);
-
-      socket.disconnect(true);
-    }
+    initializePresence();
   });
 
   return io;
