@@ -1,5 +1,3 @@
--- Phase 1 schema for a production-oriented direct chat backend.
--- Assumes PostgreSQL 13+.
 
 BEGIN;
 

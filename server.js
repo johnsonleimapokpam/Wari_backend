@@ -1,7 +1,7 @@
 const http = require('http');
 const app = require('./src/app');
 const { env } = require('./src/config/env');
-const { pool } = require('./src/config/db');
+const { pool, query } = require('./src/config/db');
 const { initializeSocketServer } = require('./src/sockets/socketServer');
 const redisClient = require("./src/config/redis")
 
@@ -12,7 +12,7 @@ let server;
 async function bootstrap(){
   await redisClient.connect();
 
-  await pool.query('SELECT 1');
+  await query('SELECT 1');
   console.log("Postgres Connected");
 
   server = httpServer.listen(env.PORT, () => {

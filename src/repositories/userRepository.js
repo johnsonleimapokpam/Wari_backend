@@ -1,4 +1,4 @@
-const { query, pool } = require('../config/db');
+const { query } = require('../config/db');
 
 const mapUser = (row) => {
   if (!row) {

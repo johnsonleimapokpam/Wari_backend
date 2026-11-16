@@ -1,7 +1,7 @@
 {
   "name": "chat-app-backend",
   "version": "1.0.0",
-  "description": "Phase 1 backend for a production-oriented real-time chat application",
+  "description": "real-time chat application",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {

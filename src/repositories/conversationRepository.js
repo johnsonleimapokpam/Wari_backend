@@ -1,4 +1,4 @@
-const { query, withTransaction, pool } = require('../config/db');
+const { query, withTransaction } = require('../config/db');
 
 const mapConversation = (row) => {
   if (!row) {
@@ -243,7 +243,7 @@ const findDirectConversation =
   ) => {
 
     const result =
-      await pool.query(
+      await query(
         `
         SELECT c.*
         FROM conversations c
